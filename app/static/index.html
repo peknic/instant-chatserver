@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Chatser 测试客户端</title>
+  <link rel="stylesheet" href="/static/style.css?v=14" />
+</head>
+<body>
+  <div id="gate" class="gate">
+    <form id="gate-form" class="gate-box">
+      <h2>请输入访问密码</h2>
+      <input id="gate-password" type="password" placeholder="访问密码" autocomplete="off" />
+      <button type="submit" class="primary full">进入</button>
+      <p id="gate-error" class="hint err"></p>
+    </form>
+  </div>
+
+  <header>
+    <h1>Chatser 测试客户端</h1>
+    <div class="header-right">
+      <div id="conn-status" class="status offline">未连接</div>
+      <button id="reconnect-btn" type="button" class="secondary small hidden">重连</button>
+      <button id="logout-btn" type="button" class="secondary small">退出登录</button>
+    </div>
+  </header>
+
+  <main>
+    <aside class="col-left">
+      <section class="panel">
+        <h2>注册 / 登录</h2>
+        <div class="tabs">
+          <button id="tab-register" type="button" class="tab active">注册</button>
+          <button id="tab-login" type="button" class="tab">登录</button>
+        </div>
+
+        <div id="register-form" class="auth-form">
+          <input id="reg-username" type="text" placeholder="用户名" autocomplete="username" />
+          <input id="reg-email" type="email" placeholder="邮箱" autocomplete="email" />
+          <input id="reg-password" type="password" placeholder="密码（至少 6 位）" autocomplete="new-password" />
+          <div class="row">
+            <input id="reg-code" type="text" placeholder="邮箱验证码" />
+            <button id="send-code-btn" type="button" class="secondary">发送验证码</button>
+          </div>
+          <button id="register-btn" type="button" class="primary full">注册</button>
+        </div>
+
+        <div id="login-form" class="auth-form hidden">
+          <input id="login-account" type="text" placeholder="用户名或邮箱" autocomplete="username" />
+          <input id="login-password" type="password" placeholder="密码" autocomplete="current-password" />
+          <button id="login-btn" type="button" class="primary full">登录</button>
+        </div>
+        <p id="auth-status" class="hint"></p>
+      </section>
+
+      <section class="panel">
+        <h2>1. 创建 Chat</h2>
+        <div class="row">
+          <input id="chat-name" type="text" placeholder="名称（可选）" />
+        </div>
+        <div class="row">
+          <input id="chat-members" type="text" placeholder="成员 ID，例如 1,2,3" />
+          <button id="create-chat-btn" type="button">创建</button>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2>2. 我的 Chat 列表</h2>
+        <button id="refresh-chats-btn" type="button" class="secondary full">刷新列表</button>
+        <ul id="chat-list" class="list"></ul>
+        <p id="chat-list-empty" class="hint">暂无 Chat，请先登录再创建。</p>
+      </section>
+
+      <section class="panel">
+        <h2>3. 邀请成员到当前 Chat</h2>
+        <div class="row">
+          <input id="invite-members" type="text" placeholder="要邀请的成员 ID，例如 4,5" />
+          <button id="invite-btn" type="button">邀请</button>
+        </div>
+        <p class="hint">只有当前 Chat 的成员才能邀请；被邀请人需已存在。</p>
+      </section>
+
+      <section class="panel">
+        <h2>4. 移出群聊成员</h2>
+        <div class="row">
+          <input id="remove-member" type="number" min="1" placeholder="要移出的成员 ID" />
+          <button id="remove-member-btn" type="button">移出</button>
+        </div>
+        <p class="hint">只有当前 Chat 的成员才能移出；也可用于自己退群。</p>
+      </section>
+
+      <section class="panel">
+        <h2>5. 删除当前 Chat</h2>
+        <button id="delete-chat-btn" type="button" class="danger full">删除 Chat 及其全部消息</button>
+        <p class="hint">仅当前 Chat 成员可删除；删除后该 Chat 条目与所有聊天记录都会被清空，且不可恢复。</p>
+      </section>
+
+      <section class="panel">
+        <h2>调试：按 ID 打开 Chat</h2>
+        <div class="row">
+          <input id="open-chat-id" type="number" min="1" placeholder="chat id" />
+          <button id="open-chat-btn" type="button">打开</button>
+        </div>
+        <p class="hint">用于测试非成员访问：非成员打开会返回 403。</p>
+      </section>
+    </aside>
+
+    <section class="col-right">
+      <section class="panel chat-panel">
+        <div class="chat-head">
+          <h2 id="chat-title">未进入任何 Chat</h2>
+          <button id="close-chat-btn" type="button" class="secondary small hidden">关闭</button>
+        </div>
+        <p id="chat-meta" class="hint"></p>
+        <div id="load-more-wrap" class="load-more-wrap hidden">
+          <button id="load-more-btn" type="button" class="secondary small">加载更多</button>
+        </div>
+        <div id="messages" class="messages"></div>
+        <form id="send-form" class="row send-row">
+          <input id="message-input" type="text" placeholder="输入消息，回车发送" autocomplete="off" />
+          <button id="send-btn" type="submit">发送</button>
+        </form>
+      </section>
+
+      <section class="panel">
+        <h2>调试日志 <button id="clear-log-btn" type="button" class="secondary small">清空</button></h2>
+        <div id="log" class="log"></div>
+      </section>
+    </section>
+  </main>
+
+  <script src="/static/app.js?v=16"></script>
+</body>
+</html>

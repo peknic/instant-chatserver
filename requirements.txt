@@ -1,0 +1,7 @@
+fastapi>=0.110
+uvicorn[standard]>=0.29
+websockets>=12
+sqlalchemy>=2.0
+pydantic>=2.0
+resend>=2
+python-dotenv>=1.0
