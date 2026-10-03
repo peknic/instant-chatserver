@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Chatser 测试客户端</title>
-  <link rel="stylesheet" href="/static/style.css?v=14" />
+  <link rel="stylesheet" href="/static/style.css?v=15" />
 </head>
 <body>
   <div id="gate" class="gate">
@@ -120,6 +120,10 @@
           <input id="message-input" type="text" placeholder="输入消息，回车发送" autocomplete="off" />
           <button id="send-btn" type="submit">发送</button>
         </form>
+        <form id="upload-form" class="row send-row">
+          <input id="file-input" type="file" />
+          <button id="upload-btn" type="submit" class="secondary">上传文件</button>
+        </form>
       </section>
 
       <section class="panel">
@@ -129,6 +133,6 @@
     </section>
   </main>
 
-  <script src="/static/app.js?v=16"></script>
+  <script src="/static/app.js?v=18"></script>
 </body>
 </html>

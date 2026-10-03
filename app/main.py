@@ -7,7 +7,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import inspect, text
 
-from . import models
+from . import files, models
 from .database import Base, engine
 from .routers import auth, chats, users
 from .ws import router as ws_router
@@ -57,6 +57,7 @@ def _migrate_chat_adminmembers() -> None:
 async def lifespan(app: FastAPI):
     Base.metadata.create_all(bind=engine)
     _migrate_chat_adminmembers()
+    files.file_root().mkdir(parents=True, exist_ok=True)
     yield
 
 

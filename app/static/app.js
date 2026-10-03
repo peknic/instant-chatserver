@@ -31,6 +31,10 @@ const state = {
   lastSeen: {},
   // 当前聊天窗口的分页状态：{chatId, offsetStart, total, hasMore, loading}
   messageView: null,
+  // userId -> username 缓存（消息头的发送者展示用）
+  userNames: {},
+  // userId -> 是否正在请求用户名，避免重复请求
+  userNamePending: {},
 };
 
 const el = (id) => document.getElementById(id);
@@ -200,6 +204,7 @@ function onAuthSuccess(data) {
   storeToken(data.token);
   const user = data.user;
   state.userId = user.id;
+  state.userNames[user.id] = user.username;
   setAuthStatus(`已登录：${user.username} (#${user.id})`, "ok");
   log(`登录成功 id=${user.id} username=${user.username}`, "in");
   // 切换账号：若已存在连接，先断开旧连接再建立新连接。
@@ -383,6 +388,8 @@ function logout() {
   state.currentChat = null;
   state.currentChatName = "";
   state.messageView = null;
+  state.userNames = {};
+  state.userNamePending = {};
   closeChat();
   clearToken();
   setAuthStatus("已退出登录", "hint");
@@ -766,6 +773,62 @@ function updateLoadMore(loading) {
   btn.textContent = isLoading ? "加载中…" : "加载更多";
 }
 
+function formatMessageHead(messageId, senderId, createdAt) {
+  const name = state.userNames[senderId] || `#${senderId}`;
+  const time = createdAt ? new Date(createdAt).toLocaleTimeString() : "";
+  const id = messageId ? `#${messageId} ` : "";
+  return `${id}${name} · ${time}`;
+}
+
+// 文件消息 content 存的是保存路径（chatfiles/<群聊名>/<文件名>），取最后一段作为文件名。
+function fileNameFromPath(path) {
+  if (!path) return "文件";
+  const parts = String(path).split("/");
+  return parts[parts.length - 1] || "文件";
+}
+
+// 下载需鉴权，浏览器直接点链接带不上 Authorization，故用 token 查询参数。
+function fileDownloadUrl(chatId, path) {
+  const name = encodeURIComponent(fileNameFromPath(path));
+  const token = loadToken() || "";
+  return `/chats/${chatId}/files/${name}?token=${encodeURIComponent(token)}`;
+}
+
+// 用户名到位后，刷新该发送者在当前窗口所有消息头。
+function updateMessageHeads(senderId) {
+  const heads = document.querySelectorAll(
+    `#messages .head[data-sender="${senderId}"]`
+  );
+  heads.forEach((head) => {
+    head.textContent = formatMessageHead(
+      head.dataset.id,
+      senderId,
+      head.dataset.time
+    );
+  });
+}
+
+// 按需查询用户名（GET /users/{id}），缓存并回填消息头。
+function ensureUserName(senderId) {
+  if (!senderId || state.userNames[senderId] || state.userNamePending[senderId]) {
+    return;
+  }
+  state.userNamePending[senderId] = true;
+  api(`/users/${senderId}`)
+    .then(({ ok, data }) => {
+      if (ok && data && data.username) {
+        state.userNames[senderId] = data.username;
+        updateMessageHeads(senderId);
+      }
+    })
+    .catch(() => {
+      /* 查询失败则保留 #id 占位 */
+    })
+    .finally(() => {
+      delete state.userNamePending[senderId];
+    });
+}
+
 function buildMessageNode(msg) {
   const div = document.createElement("div");
   div.className = "msg" + (msg.sender_id === state.userId ? " mine" : "");
@@ -773,12 +836,24 @@ function buildMessageNode(msg) {
 
   const head = document.createElement("span");
   head.className = "head";
-  const time = msg.created_at ? new Date(msg.created_at).toLocaleTimeString() : "";
-  head.textContent = `#${msg.id} user${msg.sender_id} · ${time}`;
+  head.dataset.id = msg.id;
+  head.dataset.sender = msg.sender_id;
+  head.dataset.time = msg.created_at || "";
+  head.textContent = formatMessageHead(msg.id, msg.sender_id, msg.created_at);
   div.appendChild(head);
+  ensureUserName(msg.sender_id);
 
   const body = document.createElement("span");
-  body.textContent = msg.content;
+  if (msg.message_type === "file") {
+    const link = document.createElement("a");
+    link.className = "file-link";
+    link.href = fileDownloadUrl(msg.chat_id, msg.content);
+    link.textContent = `📎 ${fileNameFromPath(msg.content)}`;
+    link.title = msg.content;
+    body.appendChild(link);
+  } else {
+    body.textContent = msg.content;
+  }
   div.appendChild(body);
   return div;
 }
@@ -882,6 +957,40 @@ function sendMessage(event) {
   input.value = "";
 }
 
+// 上传文件：服务端保存到 chatfiles/<群聊名>/ 下，并写入一条 message_type=file 的消息，
+// 随后通过 WebSocket 广播；content 即文件保存路径。
+async function sendFile(event) {
+  event.preventDefault();
+  if (!state.currentChat) {
+    log("请先进入一个 Chat", "err");
+    return;
+  }
+  const input = el("file-input");
+  const file = input.files && input.files[0];
+  if (!file) {
+    log("请先选择文件", "err");
+    return;
+  }
+  const chatId = state.currentChat.id;
+  const form = new FormData();
+  form.append("file", file, file.name);
+  const btn = el("upload-btn");
+  btn.disabled = true;
+  log(`上传文件 ${file.name}（${file.size} bytes）…`, "out");
+  const { ok, status, data } = await api(`/chats/${chatId}/files`, {
+    method: "POST",
+    body: form,
+  });
+  btn.disabled = false;
+  if (ok) {
+    log(`上传成功 ${data.content}`, "in");
+    input.value = "";
+  } else {
+    const detail = (data && (data.detail || data.error)) || JSON.stringify(data);
+    log(`上传失败 ${status}: ${detail}`, "err");
+  }
+}
+
 /* ---------- 事件绑定 ---------- */
 
 el("logout-btn").addEventListener("click", logout);
@@ -906,6 +1015,7 @@ el("open-chat-btn").addEventListener("click", () => {
   if (id > 0) openChat(id);
 });
 el("send-form").addEventListener("submit", sendMessage);
+el("upload-form").addEventListener("submit", sendFile);
 el("clear-log-btn").addEventListener("click", () => {
   el("log").innerHTML = "";
 });
@@ -934,6 +1044,7 @@ async function restoreSession() {
   }
   state.token = token;
   state.userId = data.id;
+  state.userNames[data.id] = data.username;
   setAuthStatus(`已登录：${data.username} (#${data.id})`, "ok");
   log(`已使用本地 token 恢复登录 id=${data.id} username=${data.username}`, "in");
   startConnect();

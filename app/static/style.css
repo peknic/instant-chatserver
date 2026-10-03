@@ -86,13 +86,20 @@ main {
 input[type="text"],
 input[type="number"],
 input[type="email"],
-input[type="password"] {
+input[type="password"],
+input[type="file"] {
   flex: 1;
   min-width: 0;
   padding: 6px 8px;
   border: 1px solid #bfc6d1;
   border-radius: 4px;
   font: inherit;
+}
+
+.file-link {
+  color: #2f6fed;
+  text-decoration: underline;
+  word-break: break-all;
 }
 
 button {

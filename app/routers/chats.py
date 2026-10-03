@@ -1,7 +1,11 @@
-from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from pathlib import Path
+
+from fastapi import APIRouter, Depends, File, Header, HTTPException, Query, Response, UploadFile
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
-from ..auth.deps import get_current_user
+from .. import files
+from ..auth.deps import get_current_user, user_from_token
 from ..database import get_db
 from ..models import Chat, Message, User
 from ..schemas import (
@@ -9,8 +13,9 @@ from ..schemas import (
     ChatMembersAdd,
     ChatRead,
     MessagePage,
+    MessageRead,
 )
-from ..ws import manager
+from ..ws import _serialize_message, manager
 
 router = APIRouter(prefix="/chats", tags=["chats"])
 
@@ -233,3 +238,56 @@ def list_messages(
     total = query.count()
     items = query.order_by(Message.id).offset(offset).limit(limit).all()
     return {"items": items, "total": total, "limit": limit, "offset": offset}
+
+
+@router.post("/{chat_id}/files", response_model=MessageRead)
+async def upload_file(
+    chat_id: int,
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    chat = _get_chat(db, chat_id)
+    _require_member(chat, current_user.id)
+
+    data = await file.read()
+    if not data:
+        raise HTTPException(status_code=400, detail="file is empty")
+    if len(data) > files.max_file_size():
+        raise HTTPException(status_code=413, detail="file is too large")
+
+    path = files.save_upload(chat, file.filename or "file", data)
+    message = Message(
+        chat_id=chat_id,
+        sender_id=current_user.id,
+        content=path,
+        message_type="file",
+    )
+    db.add(message)
+    db.commit()
+    db.refresh(message)
+
+    await manager.broadcast(list(chat.members or []), _serialize_message(message, chat_id))
+    return message
+
+
+@router.get("/{chat_id}/files/{filename}")
+def download_file(
+    chat_id: int,
+    filename: str,
+    token: str | None = Query(default=None),
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+):
+    bearer = authorization[7:].strip() if authorization and authorization.lower().startswith("bearer ") else None
+    user = user_from_token(db, bearer or token)
+    if user is None:
+        raise HTTPException(status_code=401, detail="invalid or expired token")
+
+    chat = _get_chat(db, chat_id)
+    _require_member(chat, user.id)
+
+    path = files.resolve_file(chat, filename)
+    if path is None:
+        raise HTTPException(status_code=404, detail="file not found")
+    return FileResponse(path, filename=Path(filename).name)
